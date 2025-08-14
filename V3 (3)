@@ -1,0 +1,71 @@
+#!/system/bin/sh
+# Custom IP + Multiport Block / Unblock Script (Root Required)
+
+# Expiry date check
+EXPIRY_DATE="2025-08-26"  # 15 din porer tarikh (YYYY-MM-DD)
+CURRENT_DATE=$(date +%F)
+
+if [ "$CURRENT_DATE" \> "$EXPIRY_DATE" ]; then
+    echo "❌ BYPASS EXPIRED. Please contact SRABON"
+    exit 1
+fi
+
+# Target IPs
+IPS="8.8.8.8 8.8.4.4 202.81.96.8"
+# Target IP Ranges (CIDR)
+RANGES="172.0.0.0/8 148.0.0.0/8 23.0.0.0/8 43.0.0.0/8 3.0.0.0/8 15.0.0.0/8 34.0.0.0/8 35.0.0.0/8 142.0.0.0/8 13.0.0.0/8"
+
+# Multiple ports space separated
+PORTS="443 10012"
+
+# Check root
+if [ "$(id -u)" != "0" ]; then
+    echo "❌ Please run as root (su)"
+    exit 1
+fi
+
+# Convert space separated ports to comma separated for iptables
+PORTS_CSV=$(echo $PORTS | tr ' ' ',')
+
+block_ips() {
+    # Block IP ranges
+    for range in $RANGES; do
+        iptables -A OUTPUT -d $range -p tcp -m multiport --dports $PORTS_CSV -j DROP
+        iptables -A INPUT -s $range -p tcp -m multiport --sports $PORTS_CSV -j DROP
+        echo "BLOCKED"
+    done
+
+    # Block individual IPs
+    for ip in $IPS; do
+        iptables -A OUTPUT -d $ip -p tcp -m multiport --dports $PORTS_CSV -j DROP
+        iptables -A INPUT -s $ip -p tcp -m multiport --sports $PORTS_CSV -j DROP
+        echo "BLOCKED"
+    done
+}
+
+unblock_ips() {
+    # Unblock IP ranges
+    for range in $RANGES; do
+        iptables -D OUTPUT -d $range -p tcp -m multiport --dports $PORTS_CSV -j DROP 2>/dev/null
+        iptables -D INPUT -s $range -p tcp -m multiport --sports $PORTS_CSV -j DROP 2>/dev/null
+        echo "UNBLOCKED"
+    done
+
+    # Unblock individual IPs
+    for ip in $IPS; do
+        iptables -D OUTPUT -d $ip -p tcp -m multiport --dports $PORTS_CSV -j DROP 2>/dev/null
+        iptables -D INPUT -s $ip -p tcp -m multiport --sports $PORTS_CSV -j DROP 2>/dev/null
+        echo "UNBLOCKED"
+    done
+}
+
+echo "1) Block All Listed IPs and Ranges on ports: $PORTS"
+echo "2) Unblock All Listed IPs and Ranges on ports: $PORTS"
+echo -n "Choose (1/2): "
+read choice
+
+case $choice in
+    1) block_ips ;;
+    2) unblock_ips ;;
+    *) echo "Invalid choice" ;;
+esac
